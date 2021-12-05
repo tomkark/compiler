@@ -24,4 +24,4 @@ int	code_recur			ARGS((treenode*));
 
 END_HEADER
 
-#endif   
+#endif
