@@ -13,7 +13,7 @@ int label_for = 0;
 int label_while = 0;
 int label_cond = 0;
 int label_doWhile = 0;
-
+string breakJump = "";
 
 
 
@@ -229,6 +229,13 @@ public:
     }
 };
 
+class Break : public TreeNode {
+public:
+    virtual void gencode(string c_type) {
+        cout << "ujp " << breakJump << endl;
+    }
+}
+
 class For : public TreeNode { //son1 - statement, son2 - increment
 public:
     TreeNode* init = NULL;
@@ -236,6 +243,8 @@ public:
 
     virtual void gencode(string c_type) {
         int label = label_for++;
+        string prevBreakJump = breakJump;
+        breakJump = "for_end" + label;
 
         init->gencode("coder");
 
@@ -250,6 +259,8 @@ public:
 
         cout << "ujp for_loop" << label << endl;
         cout << "for_end" << label << ":" << endl;
+
+        breakJump = prevBreakJump;
     }
 };
 
@@ -257,6 +268,8 @@ class While : public TreeNode { //son1 - cond, son2 - statement
 public:
     virtual void gencode(string c_type) {
         int label = label_while++;
+        string prevBreakJump = breakJump;
+        breakJump = "while_end" + label;
 
         cout << "while_loop" << label << ":" << endl;
 
@@ -268,6 +281,7 @@ public:
 
         cout << "ujp while_loop" << label << endl;
         cout << "while_end" << label << ":" << endl;
+        breakJump = prevBreakJump;
     }
 };
 
@@ -276,10 +290,13 @@ class DoWhile :public TreeNode
 public:
     virtual void gencode(string c_type){
         int label = label_doWhile++;
+        string prevBreakJump = breakJump;
+        breakJump = "doWhile_end" + label;
         cout << "doWhile_loop" << label << ":" << endl;
         if(son1) son1->gencode("coder");
         if(son2) son2->gencode("coder");
         cout << "fjp doWhile_end" << label << endl << "ujp doWhile_loop" << label  << endl << "doWhile_end" << label << ":" << endl;
+        breakJump = prevBreakJump;
     }
 };
 
@@ -323,7 +340,7 @@ public:
                 break;
             }
         }
-        cout << "creating var " << static_cast<Id*>(son1)->id_name << " with address " << Stack_Address << endl;
+        //cout << "creating var " << static_cast<Id*>(son1)->id_name << " with address " << Stack_Address << endl;
         ST.insert(static_cast<Id*>(son1)->id_name, typeString, Stack_Address++, 1); // you need to add the type and size according to declaration of identifier in AST
     }
 };
