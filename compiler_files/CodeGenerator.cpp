@@ -14,32 +14,38 @@ int label_while = 0;
 int label_cond = 0;
 int label_doWhile = 0;
 string breakJump = "";
+int label_switch = 0;
+int label_case = 0;
+string currentClassDeclaration = "";
 
 
 
 class Variable {
-
+public:
     /* Think! what does a Variable contain? */
     string identifier, type;
-    int address, size;
+    int address, size, pointerDepth, dimCount, typeSize;
     Variable *next;
+    int* dimSizes;
 
-public:
     Variable() {
         next = NULL;
     }
 
-    Variable(string key, string type, int address, int size) {
+    Variable(string key, string type, int address, int size, int pointerDepth = 0, int dimCount = 0, int* dimSizes = NULL, int typeSize = 1) {
         this->identifier = key;
         this->size = size;
         this->type = type;
         this->address = address;
+        this->pointerDepth = pointerDepth;
         next = NULL;
+        this->dimCount = dimCount;
+        this->dimSizes = dimSizes;
+        this->typeSize = typeSize;
     }
 
     friend class SymbolTable;
 };
-
 class SymbolTable {
     /* Think! what can you add to  symbol_table */
     Variable *head[MAX];
@@ -70,10 +76,29 @@ public:
         return -1; // not found
     }
 
-    // Function to insert an identifier
-    bool insert(string id, string type, int address, int size) {
+    Variable* GetVariable(string id){
         int index = hashf(id);
-        Variable *p = new Variable(id, type, address, size);
+        Variable *start = head[index];
+
+        if (start == NULL)
+            return NULL;
+
+        while (start != NULL) {
+
+            if (start->identifier == id) {
+                return start;
+            }
+
+            start = start->next;
+        }
+
+        return NULL; // not found
+    }
+
+    // Function to insert an identifier
+    bool insert(string id, string type, int address, int size, int pointerDepth = 0, int dimCount = 0, int* dimSizes = NULL, int typeSize = 1) {
+        int index = hashf(id);
+        Variable *p = new Variable(id, type, address, size, pointerDepth, dimCount, dimSizes, typeSize);
 
         if (head[index] == NULL) {
             head[index] = p;
@@ -102,6 +127,146 @@ public:
 
 SymbolTable ST;
 
+class Struct {
+    Variable *head[MAX];
+public:
+    string identifier;
+    int size;
+    Struct *next;
+
+    Struct() {
+        next = NULL;
+        for (int i = 0; i < MAX; i++)
+            head[i] = NULL;
+    }
+
+    Variable* GetVariable(string id){
+        int index = hashf(id);
+        Variable *start = head[index];
+
+        if (start == NULL)
+            return NULL;
+
+        while (start != NULL) {
+
+            if (start->identifier == id) {
+                return start;
+            }
+
+            start = start->next;
+        }
+
+        return NULL; // not found
+    }
+
+    // Function to insert an identifier
+    bool insert(string id, string type, int size, int pointerDepth = 0, int dimCount = 0, int* dimSizes = NULL, int typeSize = 1) {
+        int index = hashf(id);
+        Variable *p = new Variable(id, type, this->size, size, pointerDepth, dimCount, dimSizes, typeSize);
+        //cout << id << " at offset " << this->size << endl;
+        this->size += size;
+
+        if (head[index] == NULL) {
+            head[index] = p;
+            return true;
+        } else {
+            Variable *start = head[index];
+            while (start->next != NULL)
+                start = start->next;
+            start->next = p;
+            return true;
+        }
+
+        return false;
+    }
+
+    int hashf(string id) {
+        int asciiSum = 0;
+
+        for (int i = 0; i < id.length(); i++) {
+            asciiSum = asciiSum + id[i];
+        }
+
+        return (asciiSum % MAX);
+    }
+
+    Struct(string key, int size = 0) {
+        this->identifier = key;
+        this->size = size;
+        next = NULL;
+        for (int i = 0; i < MAX; i++)
+            head[i] = NULL;
+    }
+
+    friend class StructTable;
+};
+
+class StructTable {
+    Struct *head[MAX];
+public:
+
+    StructTable() {
+        for (int i = 0; i < MAX; i++)
+            head[i] = NULL;
+    }
+
+    Struct* GetStruct(string id){
+        int index = hashf(id);
+        Struct *start = head[index];
+        if (start == NULL)
+            return NULL;
+
+        while (start != NULL) {
+
+            if (start->identifier == id) {
+                return start;
+            }
+
+            start = start->next;
+        }
+
+        return NULL; // not found
+    }
+
+    // Function to insert an identifier
+    bool insert(string id, int size = 0) {
+        int index = hashf(id);
+        Struct *p = new Struct(id, size);
+        if (head[index] == NULL) {
+            head[index] = p;
+            return true;
+        } else {
+            Struct *start = head[index];
+            while (start->next != NULL)
+                start = start->next;
+            start->next = p;
+            return true;
+        }
+
+        return false;
+    }
+
+    int hashf(string id) {
+        int asciiSum = 0;
+
+        for (int i = 0; i < id.length(); i++) {
+            asciiSum = asciiSum + id[i];
+        }
+
+        return (asciiSum % MAX);
+    }
+
+};
+
+StructTable structTable;
+
+int TypeToSize(string type, bool isPointer = false){
+    if(isPointer || type == "int" || type == "double" || type == "float")
+        return 1;
+    else
+        return structTable.GetStruct(type)->size;
+}
+
 class TreeNode { //base class
 public:
     /*you can add another son nodes */
@@ -119,6 +284,22 @@ public:
         if (son2 != NULL)
             son2->gencode(c_type);
     };
+};
+
+class VarTreeNode : public TreeNode {
+public:
+    virtual string GetIdentifier(){
+        cout << "this shouldn't happen 1" << endl;
+        return "this shouldn't happen 1";
+    }
+    virtual string GetType(){
+        cout << "this shouldn't happen 2" << endl;
+        return "this shouldn't happen 2";
+    }
+    virtual int GetPointerDepth(){
+        cout << "this shouldn't happen 3" << endl;
+        return -1;
+    }
 };
 
 /*
@@ -234,7 +415,7 @@ public:
     virtual void gencode(string c_type) {
         cout << "ujp " << breakJump << endl;
     }
-}
+};
 
 class For : public TreeNode { //son1 - statement, son2 - increment
 public:
@@ -244,7 +425,7 @@ public:
     virtual void gencode(string c_type) {
         int label = label_for++;
         string prevBreakJump = breakJump;
-        breakJump = "for_end" + label;
+        breakJump = "for_end" + to_string(label);
 
         init->gencode("coder");
 
@@ -269,7 +450,7 @@ public:
     virtual void gencode(string c_type) {
         int label = label_while++;
         string prevBreakJump = breakJump;
-        breakJump = "while_end" + label;
+        breakJump = "while_end" + to_string(label);
 
         cout << "while_loop" << label << ":" << endl;
 
@@ -291,7 +472,7 @@ public:
     virtual void gencode(string c_type){
         int label = label_doWhile++;
         string prevBreakJump = breakJump;
-        breakJump = "doWhile_end" + label;
+        breakJump = "doWhile_end" + to_string(label);
         cout << "doWhile_loop" << label << ":" << endl;
         if(son1) son1->gencode("coder");
         if(son2) son2->gencode("coder");
@@ -300,7 +481,35 @@ public:
     }
 };
 
-class Id : public TreeNode {
+class Switch : public TreeNode {
+public:
+
+    virtual void gencode(string c_type = "coder"){
+        label_case = 0;
+        string prevBreakJump = breakJump;
+        breakJump = "switch_end" + to_string(label_switch);
+        son1->gencode("coder");
+        son2->gencode();
+        cout << "switch" << label_switch << "_case" << label_case << ":" << endl;
+        cout << "switch_end" << label_switch++ << ":" << endl;
+        breakJump = prevBreakJump;
+    }
+};
+
+class Case : public TreeNode {
+public:
+
+    virtual void gencode(string c_type = "coder"){
+        cout << "switch" << label_switch << "_case" << label_case++ << ":" << endl;
+        cout << "dpl" << endl;
+        son1->gencode("coder");
+        cout << "equ" << endl;
+        cout << "fjp " << "switch" << label_switch << "_case" << label_case << endl;
+        son2->gencode();
+    }
+};
+
+class Id : public VarTreeNode {
 public:
     string id_name;
 
@@ -317,37 +526,147 @@ public:
             cout << "ind" << endl;
         }
     }
+
+    virtual string GetIdentifier(){
+        return id_name;
+    }
+    virtual string GetType(){
+        return ST.GetVariable(GetIdentifier())->type;
+    }
+    virtual int GetPointerDepth(){
+        return ST.GetVariable(GetIdentifier())->pointerDepth;
+    }
 };
 
 class Declaration : public TreeNode {
 public:
     treenode* typeNode;
+    int pointerDepth = 0, dimCount = 0;
+    int* dimSizes = NULL;
 
     virtual void gencode(string c_type) {
+        int size, typeSize = 1;
         string typeString;
-        switch (typeNode->hdr.tok)
-        {
-            case INT: {
-                typeString = "int";
-                break;
-            }
-            case FLOAT: {
-                typeString = "float";
-                break;
-            }
-            case DOUBLE: {
-                typeString = "double";
-                break;
+        if(typeNode->hdr.type == TN_TYPE) {
+            switch (typeNode->hdr.tok) {
+                case INT: {
+                    typeString = "int";
+                    typeSize = 1;
+                    break;
+                }
+                case FLOAT: {
+                    typeString = "float";
+                    typeSize = 1;
+                    break;
+                }
+                case DOUBLE: {
+                    typeString = "double";
+                    typeSize = 1;
+                    break;
+                }
             }
         }
+        else {
+            typeString = ((leafnode*)(typeNode->lnode))->data.sval->str;
+            typeSize = structTable.GetStruct(typeString)->size;
+        }
+
+        size = typeSize;
+        for(int i = 0; i < dimCount; i++){
+            size *= dimSizes[i];
+        }
+
+        if(pointerDepth != 0)
+            size = 1;
+
+
         //cout << "creating var " << static_cast<Id*>(son1)->id_name << " with address " << Stack_Address << endl;
-        ST.insert(static_cast<Id*>(son1)->id_name, typeString, Stack_Address++, 1); // you need to add the type and size according to declaration of identifier in AST
+        ST.insert(static_cast<Id*>(son1)->id_name, typeString, Stack_Address, size, pointerDepth, dimCount, dimSizes, typeSize); // you need to add the type and size according to declaration of identifier in AST
+        Stack_Address += size;
+    }
+};
+
+class ClassDeclaration : public TreeNode {
+public:
+    virtual void gencode(string c_type) {
+        structTable.insert(static_cast<VarTreeNode*>(son1)->GetIdentifier());
+        currentClassDeclaration = static_cast<VarTreeNode*>(son1)->GetIdentifier();
+        son2->gencode(c_type);
+    }
+};
+
+class ClassComponentDeclaration : public TreeNode {
+public:
+    treenode* typeNode;
+    int pointerDepth = 0, dimCount = 0;
+    int* dimSizes = NULL;
+
+    virtual void gencode(string c_type) {
+        int size, typeSize = 1;
+        string typeString;
+        if(typeNode->hdr.type == TN_TYPE) {
+            switch (typeNode->hdr.tok) {
+                case INT: {
+                    typeString = "int";
+                    typeSize = 1;
+                    break;
+                }
+                case FLOAT: {
+                    typeString = "float";
+                    typeSize = 1;
+                    break;
+                }
+                case DOUBLE: {
+                    typeString = "double";
+                    typeSize = 1;
+                    break;
+                }
+            }
+        }
+        else {
+            typeString = ((leafnode*)(typeNode->lnode))->data.sval->str;
+            typeSize = structTable.GetStruct(typeString)->size;
+        }
+
+        size = typeSize;
+        for(int i = 0; i < dimCount; i++){
+            size *= dimSizes[i];
+        }
+
+        if(pointerDepth != 0)
+            size = 1;
+
+
+        //cout << "creating component var " << static_cast<Id*>(son1)->id_name << endl;
+        structTable.GetStruct(currentClassDeclaration)->insert(static_cast<Id*>(son1)->id_name, typeString, size, pointerDepth, dimCount, dimSizes, typeSize);
+    }
+};
+
+class StructSelector : public VarTreeNode {
+public:
+    bool arrow;
+    virtual void gencode(string c_type = "coder"){
+        son1->gencode(arrow?"coder":"codel");
+        cout << "inc " << structTable.GetStruct(static_cast<VarTreeNode*>(son1)->GetType())->GetVariable(static_cast<VarTreeNode*>(son2)->GetIdentifier())->address << endl;
+
+        if(c_type == "coder") {
+            cout << "ind" << endl;
+        }
+    }
+
+    virtual string GetIdentifier(){
+        return static_cast<VarTreeNode*>(son1)->GetIdentifier();
+    }
+    virtual string GetType(){
+        return structTable.GetStruct(static_cast<VarTreeNode*>(son1)->GetType())->GetVariable(static_cast<VarTreeNode*>(son2)->GetIdentifier())->type;
+    }
+    virtual int GetPointerDepth(){
+        return static_cast<VarTreeNode*>(son1)->GetPointerDepth();
     }
 };
 
 class PrintNode : public TreeNode {
 public:
-
     virtual void gencode(string c_type = "coder"){
         son1->gencode("coder");
         cout << "print" << endl;
@@ -368,6 +687,73 @@ public:
     }
 };
 
+class Dereference : public VarTreeNode {
+public:
+    int dereferenceDepth = 0;
+
+    virtual void gencode(string c_type){
+        son1->gencode(c_type);
+        for(int i = 0; i < dereferenceDepth; i++){
+            cout << "ind" << endl;
+        }
+    }
+
+    virtual string GetIdentifier(){
+        return static_cast<VarTreeNode*>(son1)->GetIdentifier();
+    }
+    virtual string GetType(){
+        return static_cast<VarTreeNode*>(son1)->GetType();
+    }
+    virtual int GetPointerDepth(){
+        return static_cast<VarTreeNode*>(son1)->GetPointerDepth() - dereferenceDepth;
+    }
+};
+
+class ArrayAccess : public VarTreeNode {
+public:
+    int dimCount = 0;
+    TreeNode** indicesNodes;
+    TreeNode* id;
+    string ident = "";
+    virtual void gencode(string c_type){
+        id->gencode("codel");
+
+        Variable* arr = ST.GetVariable(ident);
+        int dimMul = 1;
+        if(arr) {
+            dimMul = TypeToSize(GetType(), GetPointerDepth()>0);
+            for (int i = 1; i < dimCount; i++) {
+                dimMul *= arr->dimSizes[i];
+            }
+        }
+        //cout << "arr dim count " << arr.dimCount << endl;
+        for(int i = 0; i < dimCount; i++){
+            indicesNodes[i]->gencode("coder");
+            cout << "ixa " << dimMul << endl;
+            if(i+1 != dimCount)
+                dimMul /= arr->dimSizes[i+1];
+        }
+        if(dimCount == 0) {
+            indicesNodes[0]->gencode("coder");
+            cout << "ixa " << dimMul << endl;
+        }
+        if(c_type == "coder")
+            cout << "ind" << endl;
+    }
+
+    virtual string GetIdentifier(){
+        return static_cast<VarTreeNode*>(id)->GetIdentifier();
+    }
+    virtual string GetType(){
+        return static_cast<VarTreeNode*>(id)->GetType();
+    }
+    virtual int GetPointerDepth(){
+        return static_cast<VarTreeNode*>(id)->GetPointerDepth();
+    }
+};
+
+
+
 TreeNode *obj_tree(treenode *root);
 
 /*
@@ -386,12 +772,14 @@ int code_recur(treenode *root) {
 *	Output: Tree of objects
 */
 TreeNode *obj_tree(treenode *root) {
+
     if_node *ifn;
     for_node *forn;
     leafnode *leaf;
     if (!root) {
         return NULL;
     }
+    //cout << "recur " << root->hdr.type << endl;
 
     switch (root->hdr.which) {
         case LEAF_T:
@@ -408,6 +796,7 @@ TreeNode *obj_tree(treenode *root) {
                             *	leaf->data.sval->str
                             */
                 {
+                    //cout << "ident: " << leaf->data.sval->str << endl;
                     Id *ident = new Id(leaf->data.sval->str);
                     return ident;
                 }
@@ -539,11 +928,12 @@ TreeNode *obj_tree(treenode *root) {
                     obj_tree(root->rnode);
                     break;
 
-                case TN_TRANS_LIST:
-                    /* Maybe you will use it later */
-                    obj_tree(root->lnode);
-                    obj_tree(root->rnode);
-                    break;
+                case TN_TRANS_LIST:{
+                    TreeNode *node = new TreeNode();
+                    node->son1 = obj_tree(root->lnode);
+                    node->son2 = obj_tree(root->rnode);
+                    return node;
+                }
 
                 case TN_FUNC_DECL:
                     /* Maybe you will use it later */
@@ -570,9 +960,7 @@ TreeNode *obj_tree(treenode *root) {
 
                 case TN_BLOCK:
                     /* Maybe you will use it later */
-                    //TODO: i dont think this is right
                 {
-                    cout << "reached block " << endl;
                     TreeNode *block = new TreeNode();
                     block->son1 = obj_tree(root->lnode);
                     block->son2 = obj_tree(root->rnode);
@@ -602,12 +990,13 @@ TreeNode *obj_tree(treenode *root) {
                     obj_tree(root->rnode);
                     break;
 
-                case TN_FIELD_LIST:
+                case TN_FIELD_LIST: {
                     /* Maybe you will use it later */
-                    obj_tree(root->lnode);
-                    obj_tree(root->rnode);
-                    break;
-
+                    TreeNode *node = new TreeNode();
+                    node->son1 = obj_tree(root->lnode);
+                    node->son2 = obj_tree(root->rnode);
+                    return node;
+                }
                 case TN_PARAM_LIST:
                     /* Maybe you will use it later */
                     obj_tree(root->lnode);
@@ -620,21 +1009,83 @@ TreeNode *obj_tree(treenode *root) {
                     obj_tree(root->rnode);
                     break;
 
-                case TN_TYPE_LIST:
-                    /* Maybe you will use it later */
-                    obj_tree(root->lnode);
-                    obj_tree(root->rnode);
-                    break;
+                case TN_TYPE_LIST: {
+                    TreeNode* node = new TreeNode();
+                    node->son1 = obj_tree(root->lnode);
+                    node->son2 = obj_tree(root->rnode);
+                    return node;
+                }
 
-                case TN_COMP_DECL:
-                    /* struct component declaration - for HW2 */
-                    obj_tree(root->lnode);
-                    obj_tree(root->rnode);
-                    break;
+                case TN_COMP_DECL: {
+                    ClassComponentDeclaration *declaration = new ClassComponentDeclaration();
+                    if (root->rnode == NULL)
+                        break;
+                    else if(root->rnode->hdr.type == TN_IDENT)
+                        declaration->son1 = obj_tree(root->rnode);
+                    else if(root->rnode->hdr.type == TN_ARRAY_DECL) {
+                        treenode* p = root->rnode;
+                        while(p != NULL && p->hdr.type == TN_ARRAY_DECL) {
+                            declaration->dimCount++;
+                            p = p->lnode;
+                        }
+                        declaration->son1 = obj_tree(p);
+                        int dimCount = declaration->dimCount;
+                        declaration->dimSizes = new int[declaration->dimCount];
+                        p = root->rnode;
+                        while(p != NULL && p->hdr.type == TN_ARRAY_DECL) {
+                            declaration->dimSizes[--dimCount] = ((leafnode*)p->rnode)->data.ival;
+                            p = p->lnode;
+                        }
+                    }
+                    else if(root->rnode->lnode->hdr.type == TN_PNTR) {
+                        declaration->son1 = obj_tree(root->rnode->rnode);
+                        treenode* p = root->rnode->lnode;
+                        while(p != NULL && p->hdr.type == TN_PNTR) {
+                            declaration->pointerDepth++;
+                            p = p->rnode;
+                        }
+                    }
+
+                    declaration->typeNode = root->lnode->lnode;
+                    return declaration;
+                }
 
                 case TN_DECL: {
+                    if(root->lnode->lnode->hdr.type != TN_TYPE && root->lnode->lnode->hdr.type != TN_ARRAY_DECL && root->lnode->lnode->hdr.type != TN_OBJ_REF) {
+                        TreeNode* node = new TreeNode();
+                        node->son1 = obj_tree(root->lnode);
+                        node->son2 = obj_tree(root->rnode);
+                        return node;
+                    }
                     Declaration *declaration = new Declaration();
-                    declaration->son1 = obj_tree(root->rnode);
+                    if (root->rnode == NULL)
+                        break;
+                    else if(root->rnode->hdr.type == TN_IDENT)
+                        declaration->son1 = obj_tree(root->rnode);
+                    else if(root->rnode->hdr.type == TN_ARRAY_DECL) {
+                        treenode* p = root->rnode;
+                        while(p != NULL && p->hdr.type == TN_ARRAY_DECL) {
+                            declaration->dimCount++;
+                            p = p->lnode;
+                        }
+                        declaration->son1 = obj_tree(p);
+                        int dimCount = declaration->dimCount;
+                        declaration->dimSizes = new int[declaration->dimCount];
+                        p = root->rnode;
+                        while(p != NULL && p->hdr.type == TN_ARRAY_DECL) {
+                            declaration->dimSizes[--dimCount] = ((leafnode*)p->rnode)->data.ival;
+                            p = p->lnode;
+                        }
+                    }
+                    else if(root->rnode->lnode->hdr.type == TN_PNTR) {
+                        declaration->son1 = obj_tree(root->rnode->rnode);
+                        treenode* p = root->rnode->lnode;
+                        while(p != NULL && p->hdr.type == TN_PNTR) {
+                            declaration->pointerDepth++;
+                            p = p->rnode;
+                        }
+                    }
+
                     declaration->typeNode = root->lnode->lnode;
                     return declaration;
                 }
@@ -656,7 +1107,6 @@ TreeNode *obj_tree(treenode *root) {
 
                 case TN_STEMNT_LIST:
                     /* Maybe you will use it later */
-                    //TODO: i dont think this is right
                 {
                     TreeNode *statementList = new TreeNode();
                     statementList->son1 = obj_tree(root->lnode);
@@ -665,7 +1115,6 @@ TreeNode *obj_tree(treenode *root) {
                 }
                 case TN_STEMNT:
                     /* Maybe you will use it later */
-                    //TODO: i dont think this is right
                 {
                     TreeNode *statement = new TreeNode();
                     statement->son1 = obj_tree(root->lnode);
@@ -702,11 +1151,12 @@ TreeNode *obj_tree(treenode *root) {
                     obj_tree(root->rnode);
                     break;
 
-                case TN_OBJ_DEF:
-                    /* Maybe you will use it later */
-                    obj_tree(root->lnode);
-                    obj_tree(root->rnode);
-                    break;
+                case TN_OBJ_DEF: {
+                    ClassDeclaration* classDeclaration = new ClassDeclaration();
+                    classDeclaration->son1 = obj_tree(root->lnode);
+                    classDeclaration->son2 = obj_tree(root->rnode);
+                    return classDeclaration;
+                }
 
                 case TN_OBJ_REF:
                     /* Maybe you will use it later */
@@ -727,8 +1177,8 @@ TreeNode *obj_tree(treenode *root) {
                         obj_tree(root->rnode);
                     } else if (root->hdr.tok == BREAK) {
                         /* break jump - for HW2! */
-                        obj_tree(root->lnode);
-                        obj_tree(root->rnode);
+                        Break *breakObj = new Break();
+                        return breakObj;
                     } else if (root->hdr.tok == GOTO) {
                         /* GOTO jump - for HW2! */
                         obj_tree(root->lnode);
@@ -737,38 +1187,52 @@ TreeNode *obj_tree(treenode *root) {
                     break;
 
                 case TN_SWITCH:
+                {
                     /* Switch case - for HW2! */
-                    obj_tree(root->lnode);
-                    obj_tree(root->rnode);
-                    break;
-
-                case TN_INDEX:
+                    Switch* switchObj = new Switch();
+                    switchObj->son1 = obj_tree(root->lnode);
+                    switchObj->son2 = obj_tree(root->rnode);
+                    return switchObj;
+                }
+                case TN_INDEX: {
                     /* call for array - for HW2! */
-                    obj_tree(root->lnode);
-                    obj_tree(root->rnode);
-                    break;
-
-                case TN_DEREF:
-                    /* pointer derefrence - for HW2! */
-                    obj_tree(root->lnode);
-                    obj_tree(root->rnode);
-                    break;
-
-                case TN_SELECT:
-                    /* struct case - for HW2! */
-                    if (root->hdr.tok == ARROW) {
-                        /* Struct select case "->" */
-                        /* e.g. struct_variable->x; */
-                        obj_tree(root->lnode);
-                        obj_tree(root->rnode);
-                    } else {
-                        /* Struct select case "." */
-                        /* e.g. struct_variable.x; */
-                        obj_tree(root->lnode);
-                        obj_tree(root->rnode);
+                    ArrayAccess* arrayAccess = new ArrayAccess();
+                    treenode* p = root;
+                    while(p != NULL && p->hdr.type == TN_INDEX) {
+                        arrayAccess->dimCount++;
+                        p = p->lnode;
                     }
-                    break;
-
+                    arrayAccess->id = obj_tree(p);
+                    arrayAccess->ident = static_cast<VarTreeNode*>(arrayAccess->id)->GetIdentifier();
+                    int dimCount = arrayAccess->dimCount;
+                    arrayAccess->indicesNodes = new TreeNode*[arrayAccess->dimCount];
+                    p = root;
+                    while(p != NULL && p->hdr.type == TN_INDEX) {
+                        arrayAccess->indicesNodes[--dimCount] = obj_tree(p->rnode);
+                        p = p->lnode;
+                    }
+                    return arrayAccess;
+                }
+                case TN_DEREF:
+                {
+                    /* pointer derefrence - for HW2! */
+                    Dereference* dereference = new Dereference();
+                    treenode* p = root;
+                    while(p->hdr.type == TN_DEREF) {
+                        dereference->dereferenceDepth++;
+                        p = p->rnode;
+                    }
+                    dereference->son1 = obj_tree(p);
+                    return dereference;
+                }
+                case TN_SELECT: {
+                    /* struct case - for HW2! */
+                    StructSelector* structSelector = new StructSelector();
+                    structSelector->son1 = obj_tree(root->lnode);
+                    structSelector->son2 = obj_tree(root->rnode);
+                    structSelector->arrow = (root->hdr.tok == ARROW);
+                    return structSelector;
+                }
                 case TN_ASSIGN:
                     if (root->hdr.tok == EQ) {
                         /* Regular assignment "=" */
@@ -965,9 +1429,15 @@ TreeNode *obj_tree(treenode *root) {
                 }
 
                 case TN_LABEL:
-                    obj_tree(root->lnode);
-                    obj_tree(root->rnode);
+                {
+                    if(root->lnode->hdr.tok == CASE){
+                        Case* caseObj  = new Case();
+                        caseObj->son1 = obj_tree(root->lnode->rnode);
+                        caseObj->son2 = obj_tree(root->rnode);
+                        return caseObj;
+                    }
                     break;
+                }
 
                 default:
                     obj_tree(root->lnode);
